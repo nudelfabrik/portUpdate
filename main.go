@@ -27,6 +27,8 @@ func main() {
 	for i := 0; i < 10; i++ {
 		fmt.Println(entrys[i].Date)
 		fmt.Println(entrys[i].Ports)
+		fmt.Println(entrys[i].Author)
+		fmt.Println(entrys[i].Description)
 	}
 
 }
