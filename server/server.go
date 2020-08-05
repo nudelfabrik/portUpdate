@@ -1,22 +1,57 @@
-package main
+package server
 
 import (
+	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/nudelfabrik/portUpdate/server/templates"
+
+	pu "github.com/nudelfabrik/portUpdate"
 )
 
-func Start() {
+type Server struct {
+	entrys    []pu.Entry
+	templates *template.Template
+}
 
+type Template struct {
+	Entrys    []pu.Entry
+	ShowError string
+}
+
+const (
+	HTMLShow = ""
+	HTMLHide = "hidden"
+)
+
+func NewServer(entrys []pu.Entry) (*Server, error) {
+
+	srv := Server{entrys: entrys}
+	channel := make(chan *template.Template)
+	srv.templates = templates.WatchTemplates(channel)
+	go func() {
+		for {
+			srv.templates = <-channel
+		}
+	}()
+	log.Println("Watching Templates in debug mode")
+
+	return &srv, nil
+}
+
+func (srv *Server) Start() {
 	// Create custom ServeMux
 	serveMux := http.NewServeMux()
 
 	serveMux.HandleFunc("/coffee", func(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "I'm a Teapot", http.StatusTeapot)
 	})
+	serveMux.HandleFunc("/", srv.IndexHandler)
 
 	// Load Certificate
 	/*cer, err := tls.LoadX509KeyPair(, srv.cfg.Keyfile())
@@ -86,4 +121,14 @@ func hstsHandler(fn http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("x-frame-options", "SAMEORIGIN")
 		fn(w, r)
 	})
+}
+
+func (srv *Server) IndexHandler(w http.ResponseWriter, req *http.Request) {
+	t := Template{Entrys: srv.entrys[:10]}
+	err := srv.templates.ExecuteTemplate(w, "list.html", t)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
 }
