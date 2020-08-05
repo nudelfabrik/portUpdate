@@ -1,4 +1,4 @@
-package main
+package portUpdate
 
 import (
 	"bufio"
@@ -35,7 +35,7 @@ func GetEntries(entries chan Entry) {
 		}
 		// The first bytes of data are always a match, but we want to get the beginning
 		// of the next entry.
-		loc := RegexDate.FindIndex(data[9:])
+		loc := regexDate.FindIndex(data[9:])
 		if loc != nil {
 			return loc[0] + 9, data[0 : loc[0]+8], nil
 		}
@@ -67,20 +67,20 @@ func Parse(wg *sync.WaitGroup, entries chan Entry, data string) {
 	defer wg.Done()
 
 	var e Entry
-	date := RegexDate.FindStringSubmatch(data)
+	date := regexDate.FindStringSubmatch(data)
 	if date != nil {
 		e.Date = date[1]
 	}
 
-	authors := RegexAuthor.FindStringSubmatch(data)
+	authors := regexAuthor.FindStringSubmatch(data)
 	if authors != nil {
 		e.Author = authors[1]
 	}
 
-	affects := RegexAffectsLine.FindString(data)
-	e.Ports = RegexAffects.FindAllString(affects, -1)
+	affects := regexAffectsLine.FindString(data)
+	e.Ports = regexAffects.FindAllString(affects, -1)
 
-	e.Description = RegexDescr.FindStringSubmatch(data)[1]
+	e.Description = regexDescr.FindStringSubmatch(data)[1]
 	entries <- e
 }
 

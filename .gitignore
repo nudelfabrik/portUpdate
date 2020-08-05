@@ -1,4 +1,4 @@
-port-UPDATING
+cmd/portUpdate/portUpdate
 # Binaries for programs and plugins
 *.exe
 *.dll
