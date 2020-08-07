@@ -4,10 +4,11 @@ import (
 	"bufio"
 	"os"
 	"sync"
+	"time"
 )
 
 type Entry struct {
-	Date        string
+	Date        time.Time
 	Ports       []string
 	Author      string
 	Description string
@@ -57,19 +58,22 @@ func GetEntries(entries chan Entry) {
 
 	for bodyScan.Scan() {
 		wg.Add(1)
-		go Parse(&wg, entries, bodyScan.Text())
+		go parse(&wg, entries, bodyScan.Text())
 	}
 	wg.Wait()
 	close(entries)
 }
 
-func Parse(wg *sync.WaitGroup, entries chan Entry, data string) {
+func parse(wg *sync.WaitGroup, entries chan Entry, data string) {
 	defer wg.Done()
 
 	var e Entry
 	date := regexDate.FindStringSubmatch(data)
 	if date != nil {
-		e.Date = date[1]
+		datum, err := time.Parse("20060102", date[1])
+		if err == nil {
+			e.Date = datum
+		}
 	}
 
 	authors := regexAuthor.FindStringSubmatch(data)
