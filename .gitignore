@@ -1,4 +1,5 @@
 cmd/portUpdate/portUpdate
+cmd/server/server
 # Binaries for programs and plugins
 *.exe
 *.dll
