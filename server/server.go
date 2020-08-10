@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/tls"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -9,14 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nudelfabrik/portUpdate/server/templates"
-
 	pu "github.com/nudelfabrik/portUpdate"
+	"github.com/nudelfabrik/portUpdate/server/templates"
 )
 
 type Server struct {
 	entrys    []pu.Entry
 	templates *template.Template
+	enableSSL bool
 }
 
 type Template struct {
@@ -30,10 +32,10 @@ const (
 )
 
 func NewServer(entrys []pu.Entry) (*Server, error) {
-
 	srv := Server{entrys: entrys}
 	channel := make(chan *template.Template)
 	srv.templates = templates.WatchTemplates(channel)
+
 	go func() {
 		for {
 			srv.templates = <-channel
@@ -53,11 +55,61 @@ func (srv *Server) Start() {
 	})
 	serveMux.HandleFunc("/", srv.IndexHandler)
 
-	// Load Certificate
-	/*cer, err := tls.LoadX509KeyPair(, srv.cfg.Keyfile())
+	var (
+		rTimeout time.Duration = 5 * time.Second
+
+		wTimeout time.Duration = 10 * time.Second
+
+		iTimeout time.Duration = 120 * time.Second
+	)
+
+	var tlsConf *tls.Config = nil
+
+	if srv.enableSSL {
+		tlsConf = tlsConfig("certfile", "keyfile")
+	}
+
+	httpServer := &http.Server{
+		Addr:      ":8000",
+		Handler:   serveMux,
+		TLSConfig: tlsConf,
+		// Added Timeouts to prevent resource exhaustion
+		ReadTimeout:  rTimeout,
+		WriteTimeout: wTimeout,
+		IdleTimeout:  iTimeout,
+	}
+
+	// Setup Shutdown Signal Handling
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigs
+		log.Println("Shutting down server...")
+
+		if err := httpServer.Close(); err != nil {
+			log.Fatalf("could not shutdown: %v", err)
+		}
+
+		os.Stdout.WriteString("\n")
+	}()
+
+	log.Println("Start Server")
+	// Certs are loaded into tlsConf
+	// httpServer.ListenAndServeTLS("", "")
+	err := httpServer.ListenAndServe()
 	if err != nil {
-		log.Println("Error Loading Certificates: %v", err)
-		return
+		fmt.Println(err)
+	}
+}
+
+func tlsConfig(certfile, keyfile string) *tls.Config {
+	// Load Certificate
+	cer, err := tls.LoadX509KeyPair(certfile, keyfile)
+	if err != nil {
+		log.Printf("Error Loading Certificates: %v\n", err)
+
+		return nil
 	}
 
 	// TLS Config
@@ -85,36 +137,11 @@ func (srv *Server) Start() {
 			// tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 		},
 	}
-	*/
 
-	httpServer := &http.Server{
-		Addr:    ":8000",
-		Handler: serveMux,
-		//TLSConfig: tlsConf,
-		// Added Timeouts to prevent resource exhaustion
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
-
-	// Setup Shutdown Signal Handling
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigs
-		log.Println("Shutting down server...")
-		if err := httpServer.Close(); err != nil {
-			log.Fatalf("could not shutdown: %v", err)
-		}
-		os.Stdout.WriteString("\n")
-	}()
-
-	log.Println("Start Server")
-	// Certs are loaded into tlsConf
-	//httpServer.ListenAndServeTLS("", "")
-	httpServer.ListenAndServe()
+	return tlsConf
 }
 
+/*
 func hstsHandler(fn http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; preload")
@@ -122,13 +149,14 @@ func hstsHandler(fn http.HandlerFunc) http.HandlerFunc {
 		fn(w, r)
 	})
 }
+*/
 
 func (srv *Server) IndexHandler(w http.ResponseWriter, req *http.Request) {
 	t := Template{Entrys: srv.entrys[:10]}
+
 	err := srv.templates.ExecuteTemplate(w, "list.html", t)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-
 }
