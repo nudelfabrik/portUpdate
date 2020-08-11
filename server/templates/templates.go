@@ -11,7 +11,7 @@ import (
 func WatchTemplates(tch chan *template.Template) *template.Template {
 	path := "../../server/templates/tmpls/"
 
-	var fileNames = []string{
+	fileNames := []string{
 		"header.html",
 		"footer.html",
 		"list.html",

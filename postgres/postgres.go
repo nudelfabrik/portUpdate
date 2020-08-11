@@ -10,14 +10,15 @@ import (
 	pu "github.com/nudelfabrik/portUpdate"
 )
 
-type Service struct {
+type BackendService struct {
 	pgdb     *sql.DB
 	username string
 	dbname   string
 }
 
+// Create and Setup a new BackendService with Postgres
 func NewBackendService() (pu.BackendService, error) {
-	pgs := Service{}
+	pgs := BackendService{}
 	pgs.username = "bene"
 	pgs.dbname = "pgspu"
 
@@ -26,9 +27,9 @@ func NewBackendService() (pu.BackendService, error) {
 	return &pgs, err
 }
 
-func (pgs *Service) init() error {
-	var err error
-
+// Establish connection with database and create Tables.
+func (pgs *BackendService) init() (err error) {
+	// Establish connection
 	login := fmt.Sprintf("user=%s dbname=%s sslmode=disable", pgs.username, pgs.dbname)
 	pgs.pgdb, err = sql.Open("postgres", login)
 
@@ -38,6 +39,7 @@ func (pgs *Service) init() error {
 		return pu.ErrDBconnection
 	}
 
+	// Test if connection works
 	err = pgs.pgdb.Ping()
 
 	if err != nil {
@@ -46,9 +48,27 @@ func (pgs *Service) init() error {
 		return pu.ErrDBconnection
 	}
 
-	return err
+	// Capture panicing Table creations
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("Table Setup failed: ", r)
+
+			err = pu.ErrOperationFailed
+		}
+	}()
+
+	// Create Tables
+	pgs.createTable("entries", "id SERIAL PRIMARY KEY, date DATE, author text, ports text[], description text")
+
+	return nil
 }
 
-func (pgs *Service) AddEntries([]pu.Entry) error {
-	return pu.ErrUnimplemented
+// Create a single new Table, if it does not exist.
+func (pgs *BackendService) createTable(name, columns string) {
+	str := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", name, columns)
+
+	_, err := pgs.pgdb.Exec(str)
+	if err != nil {
+		panic(err)
+	}
 }
