@@ -14,7 +14,7 @@ type Entry struct {
 	Description string
 }
 
-func GetEntries(entries chan Entry) {
+func GetEntries(lastUpdate time.Time, entries chan Entry) {
 	/*
 		resp, err := http.Get("https://svnweb.freebsd.org/ports/head/UPDATING?view=co")
 		if err != nil {
@@ -24,8 +24,17 @@ func GetEntries(entries chan Entry) {
 
 		bodyScan := bufio.NewScanner(resp.Body)
 	*/
-	body, _ := os.Open("./UPDATING")
+	body, _ := os.Open("./UPDATING2")
 	bodyScan := bufio.NewScanner(body)
+
+	GetEntriesFromScanner(lastUpdate, entries, bodyScan)
+
+}
+
+// Retrieves all Entries from the Scanner on of after the date specified in lastUpdate.
+// All Entries before that date are assumed to already being stored in the BackendService.
+// Entries at exactly the day of lastUpdate have to be checked seprarately before adding them to the database.
+func GetEntriesFromScanner(lastUpdate time.Time, entries chan Entry, bodyScan *bufio.Scanner) {
 
 	// Looks for the next Entry by looking for the date
 	// Token is one complete Entry. Including date until the beginning of the next date
@@ -53,27 +62,39 @@ func GetEntries(entries chan Entry) {
 
 	var wg sync.WaitGroup
 
-	go Consumer(entries)
-	bodyScan.Scan()
-
-	for bodyScan.Scan() {
-		wg.Add(1)
-		go parse(&wg, entries, bodyScan.Text())
+	// If no last Time is given, parse all entries
+	if lastUpdate.IsZero() {
+		for bodyScan.Scan() {
+			wg.Add(1)
+			go parse(&wg, &lastUpdate, entries, bodyScan.Text())
+		}
 	}
 	wg.Wait()
 	close(entries)
 }
 
-func parse(wg *sync.WaitGroup, entries chan Entry, data string) {
-	defer wg.Done()
-
-	var e Entry
+func parseDate(data string) time.Time {
 	date := regexDate.FindStringSubmatch(data)
 	if date != nil {
 		datum, err := time.Parse("20060102", date[1])
 		if err == nil {
-			e.Date = datum
+			return datum
 		}
+	}
+	return time.Time{}
+}
+
+func parse(wg *sync.WaitGroup, lastUpdate *time.Time, entries chan Entry, data string) {
+	defer wg.Done()
+
+	var e Entry
+
+	e.Date = parseDate(data)
+
+	// If the Date is before lastUpdate,
+	// it was already present the last time portUpdate updated and can be skipped
+	if e.Date.Before(*lastUpdate) {
+		return
 	}
 
 	authors := regexAuthor.FindStringSubmatch(data)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	pu "github.com/nudelfabrik/portUpdate"
 	"github.com/nudelfabrik/portUpdate/postgres"
@@ -21,7 +22,7 @@ func main() {
 
 	entries := make(chan pu.Entry)
 
-	go pu.GetEntries(entries)
+	go pu.GetEntries(time.Time{}, entries)
 
 	entrys := pu.Consumer(entries)
 
@@ -29,13 +30,4 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	/*
-		for i := 0; i < 10; i++ {
-			fmt.Println(entrys[i].Date)
-			fmt.Println(entrys[i].Ports)
-			fmt.Println(entrys[i].Author)
-			fmt.Println(entrys[i].Description)
-		}
-	*/
 }
